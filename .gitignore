@@ -5,4 +5,4 @@ __pycache__/
 # 忽略 unsloth 编译缓存
 unsloth_compiled_cache/
 
-.idea
+.idea/
