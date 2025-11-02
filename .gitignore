@@ -1,0 +1,8 @@
+# 忽略 Python 缓存文件
+__pycache__/
+*.pyc
+
+# 忽略 unsloth 编译缓存
+unsloth_compiled_cache/
+
+.idea
