@@ -1,16 +1,8 @@
 ## 文件夹内容如下：
-**Qwen3DataAugmentor*: 训练集数据增强代码
+**Qwen3DataAugmentor**: 训练集数据增强代码
 
-**TutorialData**: 数据集
+**TrainCode**: 训练代码
 
-**results**: 各模型跑出的预测数据
+**TrainingSet1**: 官方数据集
 
-**JupyterNotebook**: 学习过程notebook
-
-**imdb_sentiment_analysis_torch**:各模型运行代码
-
-**myCode**:自己编写的模型代码
-
-**imdb_deberta**:deberta微调代码
-
-**imdb_bert**:bert相关代码
+**TrainingSet2**: 增强后的一万条数据
