@@ -1,18 +1,15 @@
 import os
 
-# [FIX] 解决显存碎片
+# 解决显存碎片
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-from sentence_transformers import SentenceTransformer, losses, InputExample, models  # 导入 'models'
+from sentence_transformers import SentenceTransformer, losses, InputExample, models
 from torch.utils.data import DataLoader
 from datasets import load_dataset
-# 确保你已经创建了 train_b_evaluator_fixed.py
 from train_b_evaluator_fixed import TrackB_Accuracy_Evaluator_NoSave
-
-# [FIX] 导入 QLoRA 和梯度检查点所需的库
 import torch
 from transformers import BitsAndBytesConfig
-from peft import LoraConfig, TaskType, prepare_model_for_kbit_training  # 导入 prepare_model_...
+from peft import LoraConfig, TaskType, prepare_model_for_kbit_training
 
 
 def main():
@@ -20,7 +17,7 @@ def main():
 
     model_name = '/root/autodl-tmp/Qwen3-Embedding-4B'
 
-    # === 构建模型 (与 baseline 完全一致) ===
+    # === 构建模型 ===
     print(f"Manually building model from: {model_name} with QLoRA")
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -55,10 +52,10 @@ def main():
         device='cuda'
     )
 
-    # 增加 LoRA 的训练容量 (与 baseline 一致)
+    # 增加 LoRA 的训练容量
     lora_config = LoraConfig(
-        r=32,  # 16 -> 32
-        lora_alpha=64,  # 32 -> 64
+        r=32,
+        lora_alpha=64,
         lora_dropout=0.1,
         bias="none",
         task_type=TaskType.FEATURE_EXTRACTION,
@@ -82,7 +79,7 @@ def main():
 
     print("Model build successful with QLoRA.")
 
-    # === 1. 加载增强的训练数据 (已修复脏数据过滤) ===
+    # === 1. 加载增强的训练数据  ===
 
     print("正在加载: synthetic_data_for_contrastive_learning.jsonl (Triplets)")
     triplet_dataset = load_dataset('json',
@@ -114,7 +111,6 @@ def main():
     for item in paired_dataset:
         if item.get('_augmented'):  # 只使用新生成的
             source_idx = item.get('_source_index')
-            # 确认 V3.4 脚本只从 dev_b (索引 < 479) 生成了有效数据
             if source_idx in all_originals_map:
                 anchor_text = all_originals_map[source_idx]
                 positive_text = item.get('text')
@@ -127,7 +123,6 @@ def main():
 
     # === 2. 定义损失函数 ===
 
-    # 使用与 baseline 一致的批处理大小
     triplet_loader = DataLoader(triplet_examples, shuffle=True, batch_size=64)
     triplet_loss = losses.TripletLoss(model=model, distance_metric=losses.TripletDistanceMetric.COSINE)
 
@@ -150,17 +145,16 @@ def main():
 
     model.fit(
         train_objectives=[
-            (triplet_loader, triplet_loss),  # 调换顺序
+            (triplet_loader, triplet_loss),
             (pair_loader, mnrl_loss),
         ],
         evaluator=evaluator,
-        evaluation_steps=200,  # 更频繁评估
+        evaluation_steps=200,
         epochs=epochs,
         warmup_steps=warmup_steps,
         output_path=output_path,
-        save_best_model=False,  # 禁用自动保存
+        save_best_model=False,
         show_progress_bar=True,
-        # 不再需要梯度累计，因为 batch_size 已经很大
     )
 
     # 手动保存最终模型
