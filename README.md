@@ -10,7 +10,9 @@
 
 ## Track B：
 
-| 模型                 | 训练数据         | r  | lora_alpha | batch_size | Epochs | 训练参数 % | 最佳 Acc | Score |
-|:-------------------|:-------------|:---|:-----------|:-----------|:-------|:-------|:-------|:------|
-| Qwen3-Embedding-4B | TrainingSet1 | 32 | 64         | 64         | 5      | 2.91 % | 0.6350 | 0.63  |
-| Qwen3-Embedding-4B | TrainingSet2 | 32 | 64         | 64         | 5      | 2.91 % | 0.6350 | 0.63  | 
+| 模型                 | 训练数据         | r  | lora_alpha | 学习率  | batch_size | Epochs | 最佳 Acc | Score |
+|:-------------------|:-------------|:---|:-----------|:-----|:-----------|:-------|:-------|:------|
+| Qwen3-Embedding-4B | TrainingSet1 | 32 | 64         | 2e-5 | 64         | 5      | 0.6350 | 0.63  |
+| Qwen3-Embedding-4B | TrainingSet2 | 32 | 64         | 2e-5 | 64         | 5      | 0.6350 | 0.63  | 
+| Qwen3-Embedding-4B | TrainingSet1 | 32 | 64         | 5e-7 | 8          | 3      | 0.6350 | 0.63  |
+| Qwen3-Embedding-4B | TrainingSet2 | 32 | 64         | 5e-7 | 8          | 3      | 0.6350 | 0.63  | 

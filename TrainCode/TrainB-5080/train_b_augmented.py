@@ -1,24 +1,21 @@
 import os
-
-# [FIX] 解决显存碎片
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-
-from sentence_transformers import SentenceTransformer, losses, InputExample, models  # 导入 'models'
+from sentence_transformers import SentenceTransformer, losses, InputExample, models
 from torch.utils.data import DataLoader
-from datasets import load_dataset
-# 确保你已经创建了 train_b_evaluator_fixed.py
+from datasets import load_dataset, Dataset
 from train_b_evaluator_fixed import TrackB_Accuracy_Evaluator_NoSave
 
-# [FIX] 导入 QLoRA 和梯度检查点所需的库
+from sentence_transformers import SentenceTransformerTrainer
+from sentence_transformers.training_args import SentenceTransformerTrainingArguments
+
 import torch
 from transformers import BitsAndBytesConfig
-from peft import LoraConfig, TaskType, prepare_model_for_kbit_training  # 导入 prepare_model_...
+from peft import LoraConfig, TaskType, prepare_model_for_kbit_training
 
 
 def main():
-    print("🚀 开始 Track B [AUGMENTED V2] 训练 (QLoRA + 低学习率 + 7 模块)...")
+    print("🚀 开始 Track B [AUGMENTED V2] 训练 (5080 QLoRA + Trainer)...")
 
-    model_name = '/root/autodl-tmp/Qwen3-Embedding-4B'
+    model_name = 'E:/model/Qwen3-Embedding-4B'
 
     # === 构建模型 ===
     print(f"Manually building model from: {model_name} with QLoRA")
@@ -55,19 +52,18 @@ def main():
         device='cuda'
     )
 
-    # ❗ [FIX] 使用 7 个模块，与你成功的 2.91% 运行保持一致
+    # LoRA 配置 (使用 7 模块)
     lora_config = LoraConfig(
         r=32,
         lora_alpha=64,
         lora_dropout=0.1,
         bias="none",
         task_type=TaskType.FEATURE_EXTRACTION,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],  # 全部 7 个层
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
     )
 
     model.add_adapter(lora_config)
 
-    # 打印可训练参数信息
     trainable_params = 0
     all_param = 0
     for _, param in model.named_parameters():
@@ -82,31 +78,30 @@ def main():
 
     print("Model build successful with QLoRA.")
 
-    # === 1. 加载增强的训练数据 (已修复 1913 bug) ===
+    # === 1. 加载增强的训练数据 ===
 
     print("正在加载: train_track_b_mixed_10k.jsonl (Augmented Pairs)")
     paired_dataset = load_dataset('json', data_files='../../TrainingSet2/train_track_b_mixed_10k.jsonl', split='train')
 
-    # --- ❗ [FIX] 修复锚点匹配逻辑 ---
+    # --- 锚点匹配逻辑 ---
     all_originals_map = {}
     print("正在加载 dev_b (用于匹配锚点)...")
     dev_b = load_dataset('json', data_files='../../TrainingSet1/dev_track_b.jsonl', split='train')
     for i, item in enumerate(dev_b):
         text = item.get('text')
         if text:
-            all_originals_map[i] = text  # 索引 0-478
+            all_originals_map[i] = text
 
     print("正在加载 synthetic_b (用于匹配锚点)...")
-    synthetic_b_offset = len(dev_b)  # 479
+    synthetic_b_offset = len(dev_b)
     synthetic_b = load_dataset('json', data_files='../../TrainingSet1/synthetic_data_for_contrastive_learning.jsonl',
                                split='train')
     for i, item in enumerate(synthetic_b):
-        text = item.get('anchor_story') or item.get('text')  # 确保能读到
+        text = item.get('anchor_story') or item.get('text')
         if text:
-            all_originals_map[i + synthetic_b_offset] = text  # 索引 479-2375
-    # --- End of Fix ---
+            all_originals_map[i + synthetic_b_offset] = text
 
-    pair_examples = []
+    pair_data_list = []
     for item in paired_dataset:
         if item.get('_augmented'):
             source_idx = item.get('_source_index')
@@ -115,60 +110,74 @@ def main():
                 positive_text = item.get('text')
 
                 if anchor_text and positive_text:
-                    pair_examples.append(InputExample(
-                        texts=[anchor_text, positive_text]
-                    ))
-    print(f"加载了 {len(pair_examples)} 个干净的增强正样本对 (已修复)")
+                    pair_data_list.append({
+                        'sentence1': anchor_text,  # 统一为 sentence1
+                        'sentence2': positive_text  # 统一为 sentence2
+                    })
+    print(f"加载了 {len(pair_data_list)} 个干净的增强正样本对 (已修复)")
+
+    train_dataset = Dataset.from_list(pair_data_list)
+    print(f"✅ 已转换为 Dataset 格式: {len(train_dataset)} 条记录")
 
     # === 2. 定义损失函数 ===
 
-    # [FIX] 只使用 MNRL 损失函数
-    pair_loader = DataLoader(pair_examples, shuffle=True, batch_size=64)
     mnrl_loss = losses.MultipleNegativesRankingLoss(model=model)
 
     # === 3. 定义评估器 ===
     evaluator = TrackB_Accuracy_Evaluator_NoSave(
         name="augmented_low_lr",
         data_path="../../TrainingSet1/dev_track_a.jsonl",
-        batch_size=64
+        batch_size=16
     )
 
     # === 4. 开始训练 ===
-    epochs = 3  # 训练 3 轮
-    warmup_steps = int(len(pair_loader) * epochs * 0.1)  # 10% 预热
-    output_path = '../../output/track_b_augmented_model_v2_qlora'
+    epochs = 3
+    output_path = '../../output/track_b_augmented_model_v2_qlora_5080'
     os.makedirs(output_path, exist_ok=True)
 
-    print(f"开始训练，批次大小: pair=64, epochs=3")
-
-    model.fit(
-        train_objectives=[
-            (pair_loader, mnrl_loss),
-            # [FIX] 移除旧的 triplet 损失
-        ],
-        evaluator=evaluator,
-        evaluation_steps=200,
-        epochs=epochs,
-        warmup_steps=warmup_steps,
-        output_path=output_path,
-        save_best_model=False,
-        show_progress_bar=True,
-        learning_rate=5e-7  # ❗❗ [FIX] 设置一个非常低的微调学习率 ❗❗
+    # 1. 定义训练参数
+    training_args = SentenceTransformerTrainingArguments(
+        output_dir=output_path,
+        num_train_epochs=epochs,
+        per_device_train_batch_size=8,
+        gradient_accumulation_steps=16,
+        learning_rate=5e-7,
+        warmup_ratio=0.1,
+        eval_strategy="steps",
+        eval_steps=60,  # (180 总步数) 每 60 步 (1 个 epoch) 评估一次
+        save_strategy="steps",
+        save_steps=60,  # 匹配 eval_steps
+        save_total_limit=2,
+        load_best_model_at_end=True,
+        logging_steps=50,
+        dataloader_num_workers=0,
+        # ❗❗ [FIX] 告诉 Trainer 我们要用 Accuracy 来判断最佳模型 ❗❗
+        metric_for_best_model="eval_evaluator",
     )
 
-    # 手动保存最终模型
-    print("\n正在保存最终模型...")
+    print(
+        f"开始训练，批次大小: {training_args.per_device_train_batch_size}, 梯度累计: {training_args.gradient_accumulation_steps}, epochs=3")
+
+    # 2. 创建训练器
+    trainer = SentenceTransformerTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        loss=mnrl_loss,
+        evaluator=evaluator,
+        # (移除了 'sentence_pairs')
+    )
+
+    # 3. 移除 model.fit()，改用 trainer.train()
+    trainer.train()
+
+    # 4. 手动保存最终模型
+    print("\n正在保存最终模型 (来自 trainer.state.best_model_checkpoint)...")
     try:
-        model.save(output_path)
-        print(f"✅ 模型已保存到: {output_path}")
+        model[0].auto_model.save_pretrained(os.path.join(output_path, "best_lora_adapter"))
+        print(f"✅ 最佳 LoRA 适配器已保存到: {output_path}/best_lora_adapter")
     except Exception as e:
-        print(f"警告: model.save() 失败: {e}")
-        print("尝试仅保存 LoRA 适配器...")
-        try:
-            model[0].auto_model.save_pretrained(os.path.join(output_path, "lora_adapter"))
-            print(f"✅ LoRA 适配器已保存")
-        except Exception as e2:
-            print(f"❌ 适配器保存也失败了: {e2}")
+        print(f"❌ 适配器保存失败: {e}")
 
     print("✅ 训练完成!")
 
