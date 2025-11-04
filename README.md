@@ -14,5 +14,5 @@
 |:-------------------|:-------------|:---|:-----------|:-----|:-----------|:-------|:-------|:------|
 | Qwen3-Embedding-4B | TrainingSet1 | 32 | 64         | 2e-5 | 64         | 5      | 0.6350 | 0.63  |
 | Qwen3-Embedding-4B | TrainingSet2 | 32 | 64         | 2e-5 | 64         | 5      | 0.6350 | 0.63  | 
-| Qwen3-Embedding-4B | TrainingSet1 | 32 | 64         | 5e-7 | 8          | 3      | 0.6350 | 0.63  |
-| Qwen3-Embedding-4B | TrainingSet2 | 32 | 64         | 5e-7 | 8          | 3      | 0.6350 | 0.63  | 
+| Qwen3-Embedding-4B | TrainingSet1 | 32 | 64         | 5e-7 | 8          | 3      | 0.630  | 0.63  |
+| Qwen3-Embedding-4B | TrainingSet2 | 32 | 64         | 5e-7 | 8          | 3      | 0.640  | 0.64  | 
