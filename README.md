@@ -8,14 +8,23 @@
 
 **TrainingSet2**: 增强后的一万条数据
 
+**ROCStories**: 70k五句话故事
+
 ## Track B：
+
 ### A100-40GB：
-| # | 模型                 | 训练数据         | r  | lora_alpha | 学习率  | batch_size | Epochs | 最佳 Acc | Score |
-|:--|:-------------------|:-------------|:---|:-----------|:-----|:-----------|:-------|:-------|:------|
-| 1 | Qwen3-Embedding-4B | TrainingSet1 | 32 | 64         | 2e-5 | 64         | 5      | 0.6350 | 0.63  |
-|   | Qwen3-Embedding-4B | TrainingSet2 | 32 | 64         | 2e-5 | 64         | 5      | 0.6350 | 0.63  |
+
+| # | 模型                 | 训练数据                    | r  | lora_alpha | 学习率  | batch_size | Epochs | 最佳 Acc | Score |
+|:--|:-------------------|:------------------------|:---|:-----------|:-----|:-----------|:-------|:-------|:------|
+| 1 | Qwen3-Embedding-4B | TrainingSet1            | 32 | 64         | 2e-5 | 64         | 5      | 0.6350 | 0.63  |
+|   | Qwen3-Embedding-4B | TrainingSet2            | 32 | 64         | 2e-5 | 64         | 5      | 0.6350 | 0.63  |
+| 2 | Qwen3-Embedding-4B | TrainingSet1+ROCStories | 32 | 64         | 5e-7 | 100        | 3      | 0.620  | 0.63  |
+
 ### RTX5080-16GB：
-| # | 模型                 | 训练数据         | r  | lora_alpha | 学习率  | batch_size | Epochs | 最佳 Acc | Score |
-|:--|:-------------------|:-------------|:---|:-----------|:-----|:-----------|:-------|:-------|:------|
-| 1 | Qwen3-Embedding-4B | TrainingSet1 | 32 | 64         | 5e-7 | 8          | 3      | 0.630  | 0.63  |
-|   | Qwen3-Embedding-4B | TrainingSet2 | 32 | 64         | 5e-7 | 8          | 3      | 0.640  | 0.64  | 
+
+| # | 模型                 | 训练数据                    | r  | lora_alpha | 学习率  | batch_size | Epochs | 最佳 Acc | Score |
+|:--|:-------------------|:------------------------|:---|:-----------|:-----|:-----------|:-------|:-------|:------|
+| 1 | Qwen3-Embedding-4B | TrainingSet1            | 32 | 64         | 5e-7 | 8          | 3      | 0.630  | 0.63  |
+|   | Qwen3-Embedding-4B | TrainingSet2            | 32 | 64         | 5e-7 | 8          | 3      | 0.640  | 0.64  | 
+| 2 | BGE-large-en-v1.5  | TrainingSet1            | /  | /          | 2e-5 | 8          | 5      | 0.635  | 0.64  |
+|   | BGE-large-en-v1.5  | TrainingSet1+ROCStories | /  | /          | 2e-5 | 8          | 5      | 0.630  | 0.63  | 

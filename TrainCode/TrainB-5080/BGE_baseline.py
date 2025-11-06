@@ -91,9 +91,9 @@ def main():
     training_args = SentenceTransformerTrainingArguments(
         output_dir=output_path,
         num_train_epochs=epochs,
-        per_device_train_batch_size=8,  # BGE推荐32
+        per_device_train_batch_size=8,
         gradient_accumulation_steps=1,
-        learning_rate=2e-5,  # BGE推荐2e-5 (比Qwen3大)
+        learning_rate=2e-5,
         warmup_ratio=0.1,
         eval_strategy="epoch",
         save_strategy="epoch",

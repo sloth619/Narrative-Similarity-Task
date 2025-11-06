@@ -1,7 +1,8 @@
 """
-Track B训练 - 使用ROCStories数据 (支持断点续传)
+Track B训练 - 使用ROCStories数据
 """
 import os
+
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 from sentence_transformers import SentenceTransformer, losses, models
@@ -57,10 +58,11 @@ def build_triplets_from_track_a(data_path):
 
 
 def main():
-    print("🚀 Track B训练 - ROCStories + Synthetic (支持断点续传)...")
+    print("🚀 Track B训练 - ROCStories + Synthetic (A100 40GB版)...")
 
-    model_name = 'E:/model/Qwen3-Embedding-4B'
-    output_path = '../../output/track_b_rocstories_5080'
+    # === 路径配置 ===
+    model_name = '/root/autodl-tmp/Narrative-Similarity-Task/models/Qwen3-Embedding-4B'
+    output_path = '/root/autodl-tmp/Narrative-Similarity-Task/output/track_b_rocstories_a100'
     os.makedirs(output_path, exist_ok=True)
 
     # === 检查是否有检查点 ===
@@ -68,7 +70,6 @@ def main():
     if os.path.exists(output_path):
         checkpoints = [d for d in os.listdir(output_path) if d.startswith('checkpoint-')]
         if checkpoints:
-            # 找到最新的检查点
             checkpoints.sort(key=lambda x: int(x.split('-')[1]))
             checkpoint_path = os.path.join(output_path, checkpoints[-1])
             print(f"✅ 找到检查点: {checkpoint_path}")
@@ -81,12 +82,14 @@ def main():
         print("✅ 模型从检查点加载完成")
     else:
         print(f"从头开始训练,加载基础模型: {model_name}")
+
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=torch.bfloat16,
             bnb_4bit_use_double_quant=True,
         )
+
         word_embedding_model = models.Transformer(
             model_name,
             tokenizer_args={'padding_side': 'left'},
@@ -113,10 +116,9 @@ def main():
             device='cuda'
         )
 
-        # LoRA配置
         lora_config = LoraConfig(
-            r=32,
-            lora_alpha=64,
+            r=64,
+            lora_alpha=128,
             lora_dropout=0.1,
             bias="none",
             task_type=TaskType.FEATURE_EXTRACTION,
@@ -133,18 +135,18 @@ def main():
     print("\n加载训练数据...")
 
     print("1. 加载ROCStories...")
-    roc_dataset = load_rocstories('E:/Code/python/Narrative-Similarity-Task/ROCStories/train.txt')
+    roc_dataset = load_rocstories('/root/autodl-tmp/Narrative-Similarity-Task/ROCStories/train.txt')
     print(f"   ROCStories: {len(roc_dataset)} 个样本")
 
     print("2. 加载Synthetic数据...")
     synthetic_dataset = build_triplets_from_track_a(
-        '../../TrainingSet1/synthetic_data_for_contrastive_learning.jsonl'
+        '/root/autodl-tmp/Narrative-Similarity-Task/TrainingSet1/synthetic_data_for_contrastive_learning.jsonl'
     )
     print(f"   Synthetic: {len(synthetic_dataset)} 个样本")
 
     print("3. 加载Dev_b数据...")
     dev_b_dataset = build_triplets_from_track_a(
-        '../../TrainingSet1/dev_track_b.jsonl'
+        '/root/autodl-tmp/Narrative-Similarity-Task/TrainingSet1/dev_track_b.jsonl'
     )
     print(f"   Dev_b: {len(dev_b_dataset)} 个样本")
 
@@ -152,6 +154,9 @@ def main():
     train_dataset = concatenate_datasets([roc_dataset, synthetic_dataset, dev_b_dataset])
 
     print(f"\n总训练样本: {len(train_dataset):,}")
+    print(f"  - ROCStories: {len(roc_dataset)} ({len(roc_dataset) / len(train_dataset) * 100:.1f}%)")
+    print(f"  - Synthetic: {len(synthetic_dataset)} ({len(synthetic_dataset) / len(train_dataset) * 100:.1f}%)")
+    print(f"  - Dev_b: {len(dev_b_dataset)} ({len(dev_b_dataset) / len(train_dataset) * 100:.1f}%)")
 
     # === 损失函数 ===
     mnrl_loss = losses.MultipleNegativesRankingLoss(model=model)
@@ -159,17 +164,17 @@ def main():
     # === 评估器 ===
     evaluator = TrackB_Accuracy_Evaluator_NoSave(
         name="rocstories_train",
-        data_path="../../TrainingSet1/dev_track_a.jsonl",
-        batch_size=32
+        data_path="/root/autodl-tmp/Narrative-Similarity-Task/TrainingSet1/dev_track_a.jsonl",
+        batch_size=128
     )
 
-    # === 训练配置 ===
+    # === 训练配置 (A100优化) ===
     epochs = 3
 
     training_args = SentenceTransformerTrainingArguments(
         output_dir=output_path,
         num_train_epochs=epochs,
-        per_device_train_batch_size=32,
+        per_device_train_batch_size=100,
         gradient_accumulation_steps=1,
         learning_rate=5e-7,
         warmup_ratio=0.1,
@@ -177,23 +182,26 @@ def main():
         save_strategy="epoch",
         save_total_limit=3,
         load_best_model_at_end=True,
-        logging_steps=50,
+        logging_steps=20,
         metric_for_best_model="eval_evaluator",
         bf16=True,
-        resume_from_checkpoint=checkpoint_path,  # 从检查点恢复
+        dataloader_num_workers=4,
+        dataloader_pin_memory=True,
+        resume_from_checkpoint=checkpoint_path,
     )
 
     print(f"\n开始训练:")
+    print(f"  - 硬件: A100 40GB")
     if checkpoint_path:
-        print(f"  ✅ 断点续传模式")
-        print(f"  - 从检查点: {checkpoint_path}")
+        print(f"  - ✅ 断点续传: {checkpoint_path}")
     else:
-        print(f"  🆕 从头开始训练")
+        print(f"  - 🆕 从头训练")
     print(f"  - 训练数据: ROCStories + Synthetic + Dev_b")
     print(f"  - 总样本: {len(train_dataset):,}")
     print(f"  - Batch size: {training_args.per_device_train_batch_size}")
+    print(f"  - LoRA rank: 64")
     print(f"  - Epochs: {epochs}")
-    print(f"  - 每500步保存检查点")
+    print(f"  - 预计步数: {len(train_dataset) // training_args.per_device_train_batch_size * epochs}")
 
     # === 训练 ===
     trainer = SentenceTransformerTrainer(
@@ -205,7 +213,7 @@ def main():
     )
 
     try:
-        trainer.train(resume_from_checkpoint=checkpoint_path)  # 传入检查点
+        trainer.train(resume_from_checkpoint=checkpoint_path)
     except KeyboardInterrupt:
         print("\n⚠️ 训练被中断!")
         print("💾 检查点已保存,可以重新运行脚本继续训练")
@@ -221,6 +229,7 @@ def main():
         print(f"✅ LoRA适配器已保存到: {output_path}/lora_adapter")
 
     print("✅ 训练完成!")
+    print(f"\n查看最佳准确率,预期: 68-72%")
 
 
 if __name__ == "__main__":

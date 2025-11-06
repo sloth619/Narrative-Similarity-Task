@@ -144,14 +144,13 @@ def main():
         learning_rate=5e-7,
         warmup_ratio=0.1,
         eval_strategy="steps",
-        eval_steps=60,  # (180 总步数) 每 60 步 (1 个 epoch) 评估一次
+        eval_steps=60,
         save_strategy="steps",
-        save_steps=60,  # 匹配 eval_steps
+        save_steps=60,
         save_total_limit=2,
         load_best_model_at_end=True,
         logging_steps=50,
         dataloader_num_workers=0,
-        # ❗❗ [FIX] 告诉 Trainer 我们要用 Accuracy 来判断最佳模型 ❗❗
         metric_for_best_model="eval_evaluator",
     )
 
@@ -165,13 +164,10 @@ def main():
         train_dataset=train_dataset,
         loss=mnrl_loss,
         evaluator=evaluator,
-        # (移除了 'sentence_pairs')
     )
 
-    # 3. 移除 model.fit()，改用 trainer.train()
     trainer.train()
 
-    # 4. 手动保存最终模型
     print("\n正在保存最终模型 (来自 trainer.state.best_model_checkpoint)...")
     try:
         model[0].auto_model.save_pretrained(os.path.join(output_path, "best_lora_adapter"))
