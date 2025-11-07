@@ -51,9 +51,7 @@ def main():
 
     # === 加载模型 ===
     print("加载模型: intfloat/e5-large-v2")
-    model_path = r'E:\model\e5-large-v2'  # 本地路径
-    # 或者直接从HF下载:
-    # model_path = 'intfloat/e5-large-v2'
+    model_path = r'E:\model\e5-large-v2'
 
     try:
         model = SentenceTransformer(model_path)
@@ -95,9 +93,9 @@ def main():
     training_args = SentenceTransformerTrainingArguments(
         output_dir=output_path,
         num_train_epochs=epochs,
-        per_device_train_batch_size=32,
-        gradient_accumulation_steps=1,
-        learning_rate=2e-5,  # E5推荐2e-5
+        per_device_train_batch_size=16,
+        gradient_accumulation_steps=2,
+        learning_rate=2e-5,
         warmup_ratio=0.1,
         eval_strategy="epoch",
         save_strategy="epoch",
@@ -131,9 +129,6 @@ def main():
     print("\n保存最终模型...")
     model.save(output_path)
     print(f"✅ 模型已保存到: {output_path}")
-
-    print("✅ 训练完成!")
-    print(f"\nE5 baseline预期准确率: 63-65%")
 
 
 if __name__ == "__main__":

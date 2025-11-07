@@ -167,11 +167,11 @@ def main():
     evaluator = TrackB_Accuracy_Evaluator_NoSave(
         name="qwen3_cmu_a100",
         data_path="/root/autodl-tmp/Narrative-Similarity-Task/TrainingSet1/dev_track_a.jsonl",
-        batch_size=32  # Qwen3大,batch小一点
+        batch_size=32
     )
 
     # === 训练配置 ===
-    epochs = 3  # CMU数据多,3个epoch
+    epochs = 3
 
     training_args = SentenceTransformerTrainingArguments(
         output_dir=output_path,
