@@ -19,7 +19,7 @@
 | 1 | Qwen3-Embedding-4B | TrainingSet1            | 32 | 64         | 2e-5 | 64         | 5      | 0.6350 | 0.63  |
 |   | Qwen3-Embedding-4B | TrainingSet2            | 32 | 64         | 2e-5 | 64         | 5      | 0.6350 | 0.63  |
 | 2 | Qwen3-Embedding-4B | TrainingSet1+ROCStories | 32 | 64         | 5e-7 | 100        | 3      | 0.620  | 0.63  |
-| 3 | Qwen3-Embedding-4B | TrainingSet1+CMU        | /  | /          | 5e-7 | 64         | 3      | 0.650  | 0.65  |
+| 3 | Qwen3-Embedding-4B | TrainingSet1+CMU        | 64 | 128        | 5e-7 | 64         | 3      | 0.650  | 0.65  |
 
 ### RTX5080-16GB：
 

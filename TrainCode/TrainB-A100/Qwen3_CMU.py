@@ -123,7 +123,7 @@ def main():
 
         # LoRA配置 (A100可以用更大的rank)
         lora_config = LoraConfig(
-            r=64,  # A100用64
+            r=64,
             lora_alpha=128,
             lora_dropout=0.1,
             bias="none",
@@ -193,7 +193,6 @@ def main():
     )
 
     print(f"\n开始训练:")
-    print(f"  - 硬件: A100 40GB")
     if checkpoint_path:
         print(f"  - ✅ 断点续传: {checkpoint_path}")
     else:
@@ -232,8 +231,6 @@ def main():
         print(f"✅ LoRA适配器已保存到: {output_path}/lora_adapter")
 
     print("✅ 训练完成!")
-    print(f"\n预期准确率: 68-72% 🚀")
-    print(f"(Qwen3大模型 + CMU Movie 40k + A100)")
 
 
 if __name__ == "__main__":
