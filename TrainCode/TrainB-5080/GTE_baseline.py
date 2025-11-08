@@ -1,8 +1,5 @@
 """
 Track B训练 - GTE-large-en-v1.5
-✅ 支持8192长文本,完美适配维基故事
-✅ MTEB检索任务领先BGE +3.75分
-✅ 预期准确率: 67-71%
 """
 import os
 import gc
@@ -229,17 +226,12 @@ def main():
     print(f"配置:")
     print(f"  - 硬件: RTX 5080 (16GB)")
     print(f"  - 模型: GTE-large-en-v1.5 (434M)")
-    print(f"  - 特点: 8192长文本支持 ✨")
     print(f"  - 训练数据: Synthetic + Dev_b")
     print(f"  - 总样本: {len(train_dataset):,}")
     print(f"  - Batch size: 24")
     print(f"  - Learning rate: 2e-5 (cosine)")
     print(f"  - Epochs: {epochs}")
     print(f"  - 零样本基线: {zero_shot_acc:.2%}")
-    print(f"\n预期结果:")
-    print(f"  - 微调后: 67-71% 🎯")
-    print(f"  - vs BGE: +2~3%")
-    print(f"  - 训练时间: 40-55分钟")
 
     # === Step 6: 训练 ===
     trainer = SentenceTransformerTrainer(
@@ -274,13 +266,6 @@ def main():
     print("\n" + "=" * 60)
     print("✅ 训练完成!")
     print("=" * 60)
-    print(f"📊 GTE-large-en-v1.5性能总结:")
-    print(f"  - 零样本: {zero_shot_acc:.2%}")
-    print(f"  - 微调后: 查看上方最佳准确率")
-    print(f"\n🎯 GTE优势:")
-    print(f"  ✅ 8192长文本支持(BGE只有512)")
-    print(f"  ✅ MTEB检索任务+3.75分")
-    print(f"  ✅ 预期比BGE高2-3%")
 
 
 if __name__ == "__main__":
