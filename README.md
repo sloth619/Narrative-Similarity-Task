@@ -32,3 +32,4 @@
 | 3 | BGE-large-en-v1.5  | TrainingSet1+CMU        | /  | /          | 2e-5 | 8          | 5      | 0.595  | 0.60  |
 | 4 | e5-large-v2        | TrainingSet1            | /  | /          | 2e-5 | 16         | 5      | 0.630  | 0.63  |
 | 5 | BGE-m3             | TrainingSet1            | /  | /          | 2e-5 | 8          | 5      | 0.575  | 0.58  | 
+| 6 | jina-v3            | TrainingSet1            | /  | /          | 2e-5 | 16         | 5      | 0.495  | 0.50  | 
