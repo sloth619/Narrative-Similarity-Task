@@ -27,7 +27,7 @@
 |:--|:-------------------|:------------------------|:---|:-----------|:-----|:-----------|:-------|:-------|:------|
 | 1 | Qwen3-Embedding-4B | TrainingSet1            | 32 | 64         | 5e-7 | 8          | 3      | 0.630  | 0.63  |
 |   | Qwen3-Embedding-4B | TrainingSet2            | 32 | 64         | 5e-7 | 8          | 3      | 0.640  | 0.64  | 
-| 2 | BGE-large-en-v1.5  | TrainingSet1            | /  | /          | 2e-5 | 8          | 5      | 0.635  | 0.64  |
+| 2 | BGE-large-en-v1.5  | TrainingSet1            | /  | /          | 2e-5 | 8          | 5      | 0.660  | 0.66  |
 |   | BGE-large-en-v1.5  | TrainingSet1+ROCStories | /  | /          | 2e-5 | 8          | 5      | 0.630  | 0.63  | 
 | 3 | BGE-large-en-v1.5  | TrainingSet1+CMU        | /  | /          | 2e-5 | 8          | 5      | 0.595  | 0.60  |
 | 4 | e5-large-v2        | TrainingSet1            | /  | /          | 2e-5 | 16         | 5      | 0.630  | 0.63  |

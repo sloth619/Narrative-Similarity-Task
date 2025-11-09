@@ -17,7 +17,7 @@ import torch
 
 
 def build_triplets_from_track_a(data_path):
-    """从Track A构建训练数据"""
+    """从Track A构建训练数据 (Baseline 原始逻辑)"""
     dataset = load_dataset('json', data_files=data_path, split='train')
 
     train_data = []
@@ -28,6 +28,7 @@ def build_triplets_from_track_a(data_path):
         label_a_closer = item.get('text_a_is_closer')
 
         if not all([anchor, text_a, text_b]):
+            # 注意: Baseline 逻辑跳过了 dev_track_b 的数据
             continue
 
         if label_a_closer is not None:
@@ -35,9 +36,14 @@ def build_triplets_from_track_a(data_path):
         else:
             positive = text_a
 
+        # --- Baseline 逻辑 ---
+        # 保留了 (anchor, positive)
         train_data.append({'sentence1': anchor, 'sentence2': positive})
+        # [BUG] 保留了 (anchor, anchor)
         train_data.append({'sentence1': anchor, 'sentence2': anchor})
+        # [BUG] 保留了 (positive, positive)
         train_data.append({'sentence1': positive, 'sentence2': positive})
+        # ---------------------
 
     return Dataset.from_list(train_data)
 
@@ -45,9 +51,24 @@ def build_triplets_from_track_a(data_path):
 def main():
     print("🚀 Track B训练 - BGE-large-en-v1.5 Baseline (5080)...")
 
+    # === 路径配置 (已修改为WSL绝对路径) ===
+    PROJECT_ROOT = "/mnt/e/Code/python/Narrative-Similarity-Task"
+
+    # 模型路径
+    model_name = '/mnt/e/model/BGE-large-en-v1.5'
+
+    # 输出路径
+    output_path = f'{PROJECT_ROOT}/output/track_b_bge_baseline_5080_wsl'
+    os.makedirs(output_path, exist_ok=True)
+
+    # 数据集路径
+    dev_track_a_path = f'{PROJECT_ROOT}/TrainingSet1/dev_track_a.jsonl'
+    synthetic_data_path = f'{PROJECT_ROOT}/TrainingSet1/synthetic_data_for_contrastive_learning.jsonl'
+    dev_track_b_path = f'{PROJECT_ROOT}/TrainingSet1/dev_track_b.jsonl'
+
     # === 加载模型  ===
-    print("加载模型: BAAI/bge-large-en-v1.5")
-    model = SentenceTransformer('E:\model\BGE-large-en-v1.5')
+    print(f"加载模型: {model_name}")
+    model = SentenceTransformer(model_name)
 
     print(f"✅ 模型加载完成")
     print(f"   Embedding维度: {model.get_sentence_embedding_dimension()}")
@@ -58,13 +79,13 @@ def main():
 
     print("1. 加载Synthetic数据...")
     synthetic_dataset = build_triplets_from_track_a(
-        '../../TrainingSet1/synthetic_data_for_contrastive_learning.jsonl'
+        synthetic_data_path # <-- 使用WSL路径
     )
     print(f"   Synthetic: {len(synthetic_dataset)} 个样本")
 
     print("2. 加载Dev_b数据...")
     dev_b_dataset = build_triplets_from_track_a(
-        '../../TrainingSet1/dev_track_b.jsonl'
+        dev_track_b_path # <-- 使用WSL路径
     )
     print(f"   Dev_b: {len(dev_b_dataset)} 个样本")
 
@@ -79,14 +100,12 @@ def main():
     # === 评估器 ===
     evaluator = TrackB_Accuracy_Evaluator_NoSave(
         name="bge_baseline",
-        data_path="../../TrainingSet1/dev_track_a.jsonl",
+        data_path=dev_track_a_path, # <-- 使用WSL路径
         batch_size=8
     )
 
     # === 训练配置 (BGE推荐参数) ===
     epochs = 5
-    output_path = '../../output/track_b_bge_baseline_5080'
-    os.makedirs(output_path, exist_ok=True)
 
     training_args = SentenceTransformerTrainingArguments(
         output_dir=output_path,
@@ -106,7 +125,7 @@ def main():
 
     print(f"\n开始训练:")
     print(f"  - 模型: BGE-large-en-v1.5")
-    print(f"  - 训练数据: Synthetic + Dev_b")
+    print(f"  - 训练数据: Synthetic + Dev_b (Baseline-Bug-Logic)")
     print(f"  - 总样本: {len(train_dataset):,}")
     print(f"  - Batch size: {training_args.per_device_train_batch_size}")
     print(f"  - Learning rate: {training_args.learning_rate}")

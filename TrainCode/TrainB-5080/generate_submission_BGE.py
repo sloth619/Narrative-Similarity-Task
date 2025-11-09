@@ -13,7 +13,7 @@ from tqdm import tqdm
 # ❗ BGE模型路径 (训练好的或原始的)
 # MODEL_PATH = r'E:\model\BGE-large-en-v1.5'  # 原始模型
 # 或者用训练好的:
-MODEL_PATH = '../../output/track_b_bge_cmu_full_5080/checkpoint-1674'  # 训练后的模型
+MODEL_PATH = '../../output/track_b_bge_baseline_5080_wsl/checkpoint-2136'  # 训练后的模型
 
 # 考题文件
 INPUT_DATA_FILE = '../../TrainingSet1/dev_track_b.jsonl'
@@ -89,8 +89,6 @@ def main():
 
     print(f"🎉 提交文件已生成！")
     print(f"请在 CodaLab 上传这个文件: {output_zip_path}")
-    print(f"\n预期在dev_track_b上的准确率: 55-60% (未训练)")
-    print(f"如果用训练后的模型,预期: 60-63%")
 
 
 if __name__ == "__main__":
