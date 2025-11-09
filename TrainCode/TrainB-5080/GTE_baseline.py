@@ -127,10 +127,17 @@ def main():
     gc.collect()
     print(f"✅ 显存已清理")
 
-    # === 路径配置 ===
+    # --- 路径配置 (使用WSL绝对路径) ---
+    PROJECT_ROOT = "/mnt/e/Code/python/Narrative-Similarity-Task"
+
     model_name = '/mnt/e/model/gte-large-en-v1.5'
-    output_path = '../../output/track_b_gte_large_en_v15'
+    output_path = f'{PROJECT_ROOT}/output/track_b_gte_large_en_v15'
     os.makedirs(output_path, exist_ok=True)
+
+    # 数据集路径
+    dev_track_a_path = f'{PROJECT_ROOT}/TrainingSet1/dev_track_a.jsonl'
+    synthetic_data_path = f'{PROJECT_ROOT}/TrainingSet1/synthetic_data_for_contrastive_learning.jsonl'
+    dev_track_b_path = f'{PROJECT_ROOT}/TrainingSet1/dev_track_b.jsonl'
 
     # === 加载模型 ===
     print(f"\n加载模型: {model_name}")
@@ -152,7 +159,7 @@ def main():
     print("\n📊 Step 1: 零样本性能测试")
     zero_shot_acc = evaluate_zero_shot(
         model=model,
-        data_path="../../TrainingSet1/dev_track_a.jsonl"
+        data_path=dev_track_a_path  # <-- 使用绝对路径
     )
 
     print(f"\n💡 分析:")
@@ -168,13 +175,13 @@ def main():
 
     print("1. 加载Synthetic数据...")
     synthetic_dataset = build_triplets_from_track_a(
-        '../../TrainingSet1/synthetic_data_for_contrastive_learning.jsonl'
+        synthetic_data_path  # <-- 使用绝对路径
     )
     print(f"   Synthetic: {len(synthetic_dataset)} 个样本")
 
     print("2. 加载Dev_b数据...")
     dev_b_dataset = build_triplets_from_track_a(
-        '../../TrainingSet1/dev_track_b.jsonl'
+        dev_track_b_path  # <-- 使用绝对路径
     )
     print(f"   Dev_b: {len(dev_b_dataset)} 个样本")
 
@@ -182,8 +189,8 @@ def main():
     train_dataset = concatenate_datasets([synthetic_dataset, dev_b_dataset])
 
     print(f"\n总训练样本: {len(train_dataset):,}")
-    print(f"  - Synthetic: {len(synthetic_dataset)} ({len(synthetic_dataset)/len(train_dataset)*100:.1f}%)")
-    print(f"  - Dev_b: {len(dev_b_dataset)} ({len(dev_b_dataset)/len(train_dataset)*100:.1f}%)")
+    print(f"  - Synthetic: {len(synthetic_dataset)} ({len(synthetic_dataset) / len(train_dataset) * 100:.1f}%)")
+    print(f"  - Dev_b: {len(dev_b_dataset)} ({len(dev_b_dataset) / len(train_dataset) * 100:.1f}%)")
 
     # === Step 3: 损失函数 ===
     mnrl_loss = losses.MultipleNegativesRankingLoss(model=model)
@@ -191,23 +198,29 @@ def main():
     # === Step 4: 评估器 ===
     evaluator = TrackB_Accuracy_Evaluator_NoSave(
         name="gte_large_v15",
-        data_path="../../TrainingSet1/dev_track_a.jsonl",
+        data_path=dev_track_a_path,  # <-- 使用绝对路径
         batch_size=32
     )
 
     # === Step 5: 训练配置 ===
     epochs = 5
+    current_learning_rate = 5e-7
+    current_batch_size = 4
+    current_grad_steps = 4
+    current_eval_strategy = "epoch"
 
     training_args = SentenceTransformerTrainingArguments(
         output_dir=output_path,
         num_train_epochs=epochs,
-        per_device_train_batch_size=4,
-        gradient_accumulation_steps=4,
-        learning_rate=5e-7,
+        per_device_train_batch_size=current_batch_size,
+        gradient_accumulation_steps=current_grad_steps,
+        learning_rate=current_learning_rate,
         lr_scheduler_type="cosine",
         warmup_ratio=0.1,
-        eval_strategy="epoch",
-        save_strategy="epoch",
+
+        eval_strategy=current_eval_strategy,
+        save_strategy=current_eval_strategy,
+
         save_total_limit=2,
         load_best_model_at_end=True,
         logging_steps=20,
@@ -228,8 +241,10 @@ def main():
     print(f"  - 模型: GTE-large-en-v1.5 (434M)")
     print(f"  - 训练数据: Synthetic + Dev_b")
     print(f"  - 总样本: {len(train_dataset):,}")
-    print(f"  - Batch size: 24")
-    print(f"  - Learning rate: 2e-5 (cosine)")
+    print(f"  - Batch size (单次): {current_batch_size}")
+    print(f"  - 梯度累积: {current_grad_steps}")
+    print(f"  - Batch size (有效): {current_batch_size * current_grad_steps}")
+    print(f"  - Learning rate: {current_learning_rate} (cosine)")
     print(f"  - Epochs: {epochs}")
     print(f"  - 零样本基线: {zero_shot_acc:.2%}")
 
