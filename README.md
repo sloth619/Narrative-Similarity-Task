@@ -16,10 +16,11 @@
 
 | # | 模型                 | 训练数据                    | r  | lora_alpha | 学习率  | batch_size | Epochs | 最佳 Acc | Score |
 |:--|:-------------------|:------------------------|:---|:-----------|:-----|:-----------|:-------|:-------|:------|
-| 1 | Qwen3-Embedding-4B | TrainingSet1            | 32 | 64         | 2e-5 | 64         | 5      | 0.635  | 0.63  |
-|   | Qwen3-Embedding-4B | TrainingSet2            | 32 | 64         | 2e-5 | 64         | 5      | 0.635  | 0.63  |
+| 1 | Qwen3-Embedding-4B | TrainingSet1            | 32 | 64         | 2e-5 | 128        | 5      | 0.635  | 0.63  |
+|   | Qwen3-Embedding-4B | TrainingSet2            | 32 | 64         | 2e-5 | 128        | 5      | 0.635  | 0.63  |
 | 2 | Qwen3-Embedding-4B | TrainingSet1+ROCStories | 32 | 64         | 5e-7 | 100        | 3      | 0.620  | 0.63  |
-| 3 | Qwen3-Embedding-4B | TrainingSet1+CMU        | 64 | 128        | 5e-7 | 64         | 3      | 0.650  | 0.65  |
+| 3 | Qwen3-Embedding-4B | TrainingSet1+10kCMU     | 64 | 128        | 5e-7 | 128        | 3      | 0.650  | 0.65  |
+| 4 | Qwen3-Embedding-4B | TrainingSet1+20kCMU     | 64 | 128        | 5e-7 | 144        | 3      | 0.635  | 0.64  |
 
 ### RTX5080-16GB：
 
