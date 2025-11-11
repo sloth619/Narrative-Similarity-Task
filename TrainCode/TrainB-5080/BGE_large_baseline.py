@@ -37,11 +37,8 @@ def build_triplets_from_track_a(data_path):
             positive = text_a
 
         # --- Baseline 逻辑 ---
-        # 保留了 (anchor, positive)
         train_data.append({'sentence1': anchor, 'sentence2': positive})
-        # [BUG] 保留了 (anchor, anchor)
         train_data.append({'sentence1': anchor, 'sentence2': anchor})
-        # [BUG] 保留了 (positive, positive)
         train_data.append({'sentence1': positive, 'sentence2': positive})
         # ---------------------
 
