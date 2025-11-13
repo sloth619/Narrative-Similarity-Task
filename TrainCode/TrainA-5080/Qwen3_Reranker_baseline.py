@@ -1,343 +1,245 @@
 """
-Track A训练 - Qwen3-Reranker-4B with QLoRA (WSL on 5080)
-使用Synthetic数据 + QLoRA微调 - 优化显存版本
+Track A训练 - Qwen3-Reranker-4B (新Trainer API + 4bit量化) - 最终修复版
 """
 import os
-
-# 解决tokenizers警告
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-import torch
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
-from transformers import Trainer, TrainingArguments
-from transformers import BitsAndBytesConfig
-from transformers.trainer_callback import TrainerCallback
-from peft import LoraConfig, get_peft_model, TaskType, prepare_model_for_kbit_training
-from datasets import Dataset, load_dataset
-from tqdm import tqdm
 import json
+import torch
+from sentence_transformers import CrossEncoder
+from sentence_transformers.cross_encoder import CrossEncoderTrainer, CrossEncoderTrainingArguments
+from datasets import Dataset
+from tqdm import tqdm
+from transformers import BitsAndBytesConfig
 
 
-def build_pairs_from_track_a(data_path):
-    """从Track A构建训练数据 - 生成正负样本对"""
-    dataset = load_dataset('json', data_files=data_path, split='train')
+def load_training_data(data_path):
+    """加载训练数据 - 返回Dataset对象"""
+    samples = []
 
-    train_data = []
-    for item in dataset:
-        anchor = item.get('anchor_text')
-        text_a = item.get('text_a')
-        text_b = item.get('text_b')
-        label_a_closer = item.get('text_a_is_closer')
+    print(f"📂 加载训练数据: {data_path}")
 
-        if not all([anchor, text_a, text_b]):
-            continue
+    with open(data_path, 'r', encoding='utf-8') as f:
+        for line_num, line in enumerate(f, 1):
+            try:
+                data = json.loads(line.strip())
 
-        # 确定正样本和负样本
-        if label_a_closer is not None:
-            positive = text_a if label_a_closer else text_b
-            negative = text_b if label_a_closer else text_a
-        else:
-            positive = text_a
-            negative = text_b
+                anchor = data['anchor_text']
+                text_a = data['text_a']
+                text_b = data['text_b']
+                label = data['text_a_is_closer']
 
-        # 添加正样本对 (label=1.0)
-        train_data.append({
-            'text1': anchor,
-            'text2': positive,
-            'label': 1.0
-        })
+                positive = text_a if label else text_b
+                negative = text_b if label else text_a
 
-        # 添加负样本对 (label=0.0)
-        train_data.append({
-            'text1': anchor,
-            'text2': negative,
-            'label': 0.0
-        })
+                samples.append({
+                    'sentence1': str(anchor),
+                    'sentence2': str(positive),
+                    'label': 1.0
+                })
+                samples.append({
+                    'sentence1': str(anchor),
+                    'sentence2': str(negative),
+                    'label': 0.0
+                })
 
-    return Dataset.from_list(train_data)
+            except Exception as e:
+                if line_num <= 5:
+                    print(f"⚠️  Line {line_num} 错误: {e}")
+                continue
+
+    print(f"✅ 加载了 {len(samples)} 个训练样本")
+
+    dataset = Dataset.from_list(samples)
+    dataset = dataset.map(
+        lambda x: {
+            'sentence1': str(x['sentence1']) if x['sentence1'] is not None else "",
+            'sentence2': str(x['sentence2']) if x['sentence2'] is not None else "",
+            'label': float(x['label'])
+        }
+    )
+    return dataset
 
 
-class TrackA_Accuracy_Evaluator:
-    """Track A准确率评估器 - 三选一分类"""
+def load_dev_data(data_path):
+    """加载验证数据"""
+    samples = []
+    print(f"📂 加载验证数据: {data_path}")
+    with open(data_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            try:
+                data = json.loads(line.strip())
+                samples.append({
+                    'anchor': data['anchor_text'],
+                    'text_a': data['text_a'],
+                    'text_b': data['text_b'],
+                    'label': data['text_a_is_closer']
+                })
+            except:
+                continue
+    print(f"✅ 加载了 {len(samples)} 个验证样本\n")
+    return samples
 
-    def __init__(self, name: str, data_path: str, tokenizer, max_length: int = 512):
+
+def evaluate_track_a(model, dev_samples):
+    """评估Track A准确率"""
+    correct = 0
+    total = len(dev_samples)
+    print("\n🔍 开始评估...")
+    for sample in tqdm(dev_samples, desc="Evaluating"):
+        score_a = model.predict([[sample['anchor'], sample['text_a']]])[0]
+        score_b = model.predict([[sample['anchor'], sample['text_b']]])[0]
+        pred = score_a > score_b
+        if pred == sample['label']:
+            correct += 1
+    accuracy = correct / total
+    return accuracy
+
+
+class TrackAEvaluator:
+    def __init__(self, dev_samples, name="track_a"):
+        self.dev_samples = dev_samples
         self.name = name
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-        self.samples = []
-        self.load_data(data_path)
+        self.best_accuracy = 0.0
 
-    def load_data(self, data_path: str):
-        """加载验证数据"""
-        print(f"Evaluator: 正在加载并清洗 {data_path}...")
-
-        with open(data_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                try:
-                    data = json.loads(line.strip())
-                    self.samples.append({
-                        'anchor': data['anchor_text'],
-                        'text_a': data['text_a'],
-                        'text_b': data['text_b'],
-                        'label': data['text_a_is_closer']
-                    })
-                except:
-                    continue
-
-        print(f"Evaluator: 加载了 {len(self.samples)} 个干净的验证样本。\n")
-
-    def __call__(self, model, device):
-        """评估模型并返回准确率"""
-        model.eval()
+    def __call__(self, model, output_path=None, epoch=-1, steps=-1):
+        print(f"\n{'='*60}")
+        print(f"[Validation {self.name}] Epoch: {epoch}, Steps: {steps}")
         correct = 0
-        total = len(self.samples)
-
-        with torch.no_grad():
-            for sample in self.samples:
-                # 编码 anchor-text_a
-                inputs_a = self.tokenizer(
-                    sample['anchor'],
-                    sample['text_a'],
-                    padding=True,
-                    truncation=True,
-                    max_length=self.max_length,
-                    return_tensors='pt'
-                ).to(device)
-
-                # 编码 anchor-text_b
-                inputs_b = self.tokenizer(
-                    sample['anchor'],
-                    sample['text_b'],
-                    padding=True,
-                    truncation=True,
-                    max_length=self.max_length,
-                    return_tensors='pt'
-                ).to(device)
-
-                # 获取相关性分数
-                score_a = model(**inputs_a).logits.squeeze().item()
-                score_b = model(**inputs_b).logits.squeeze().item()
-
-                # 预测: text_a分数更高则为True
-                pred = score_a > score_b
-
-                if pred == sample['label']:
-                    correct += 1
-
+        total = len(self.dev_samples)
+        for sample in self.dev_samples:
+            score_a = model.predict([[sample['anchor'], sample['text_a']]])[0]
+            score_b = model.predict([[sample['anchor'], sample['text_b']]])[0]
+            pred = score_a > score_b
+            if pred == sample['label']:
+                correct += 1
         accuracy = correct / total
-        model.train()
+        is_best = accuracy > self.best_accuracy
+        if is_best:
+            self.best_accuracy = accuracy
+        print(f"Accuracy: {accuracy:.4f} ({correct}/{total}){' ⭐ New best!' if is_best else ''}")
+        print(f"{'='*60}\n")
         return accuracy
 
 
-class EvaluateCallback(TrainerCallback):
-    """自定义回调 - 在每个epoch结束时评估"""
-
-    def __init__(self, evaluator, device):
-        self.evaluator = evaluator
-        self.device = device
-        self.best_accuracy = 0.0
-
-    def on_epoch_end(self, args, state, control, model=None, **kwargs):
-        """Epoch结束时评估"""
-        if model is not None:
-            print(f"\n[Validation {self.evaluator.name}] Epoch: {state.epoch:.1f}, Steps: {state.global_step}")
-
-            accuracy = self.evaluator(model, self.device)
-
-            # 判断是否为最佳
-            is_best = accuracy > self.best_accuracy
-            if is_best:
-                self.best_accuracy = accuracy
-
-            print(f"Accuracy: {accuracy:.4f} ({int(accuracy*len(self.evaluator.samples))}/{len(self.evaluator.samples)}){' ⭐ New best!' if is_best else ''}")
-
-        return control
-
-
 def main():
-    print("🚀 Track A训练 - Qwen3-Reranker-4B with QLoRA (WSL on 5080)...")
-    print("优化显存使用版本")
+    print("🚀 Track A训练 - Qwen3-Reranker-4B (新Trainer API + 4bit量化)")
+    print("="*60)
 
-    # === WSL路径配置 ===
-    PROJECT_ROOT = "/mnt/e/Code/python/Narrative-Similarity-Task"
+    MODEL_NAME = '/mnt/e/model/Qwen3-Reranker-4B'
+    TRAIN_DATA = '/mnt/e/Code/python/Narrative-Similarity-Task/TrainingSet1/synthetic_data_for_classification.jsonl'
+    DEV_DATA = '/mnt/e/Code/python/Narrative-Similarity-Task/TrainingSet1/dev_track_a.jsonl'
+    OUTPUT_DIR = '/mnt/e/Code/python/Narrative-Similarity-Task/output/track_a_trainer_4bit'
+    BATCH_SIZE = 16
+    GRADIENT_ACCUMULATION = 2
+    EPOCHS = 3
+    LEARNING_RATE = 2e-5
+    MAX_LENGTH = 512
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    model_name = '/mnt/e/model/Qwen3-Reranker-4B'
-    output_path = f'{PROJECT_ROOT}/output/track_a_qwen3_reranker_4B_qlora_wsl'
-    os.makedirs(output_path, exist_ok=True)
-
-    dev_track_a_path = f'{PROJECT_ROOT}/TrainingSet1/dev_track_a.jsonl'
-    synthetic_data_path = f'{PROJECT_ROOT}/TrainingSet1/synthetic_data_for_classification.jsonl'
-
-    # === 加载Tokenizer ===
-    print(f"加载Tokenizer: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    # 🔧 关键修复: 设置pad_token
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        print(f"✅ 设置 pad_token = eos_token: {tokenizer.pad_token}")
-
-    # === 构建模型 with QLoRA ===
-    print(f"\n加载模型: {model_name}")
-    print("使用4-bit量化配置...")
-
-    bnb_config = BitsAndBytesConfig(
+    print(f"\n🔧 配置4-bit量化...")
+    quantization_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
         bnb_4bit_compute_dtype=torch.bfloat16,
         bnb_4bit_use_double_quant=True,
     )
 
-    # 加载模型
-    model = AutoModelForSequenceClassification.from_pretrained(
-        model_name,
+    print(f"\n📦 加载模型: {MODEL_NAME}")
+    model = CrossEncoder(
+        MODEL_NAME,
         num_labels=1,
-        quantization_config=bnb_config,
-        device_map="auto",
-        torch_dtype=torch.bfloat16,
-    )
-
-    # 🔧 关键修复: 设置模型的pad_token_id
-    model.config.pad_token_id = tokenizer.pad_token_id
-
-    # 开启梯度检查点以节省显存
-    model = prepare_model_for_kbit_training(
-        model,
-        use_gradient_checkpointing=True
-    )
-
-    print(f"模型加载完成")
-
-    # === LoRA配置 ===
-    print("\n配置LoRA适配器...")
-    lora_config = LoraConfig(
-        r=32,
-        lora_alpha=64,
-        lora_dropout=0.1,
-        bias="none",
-        task_type=TaskType.SEQ_CLS,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
-    )
-
-    model = get_peft_model(model, lora_config)
-
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    all_param = sum(p.numel() for p in model.parameters())
-    print(f"✅ 可训练参数: {trainable_params:,} / {all_param:,} ({100 * trainable_params / all_param:.2f}%)")
-
-    # === 加载数据 ===
-    print("\n从synthetic数据构建训练集...")
-    train_dataset = build_pairs_from_track_a(synthetic_data_path)
-    print(f"训练样本: {len(train_dataset):,}")
-
-    # === 数据预处理 ===
-    def preprocess_function(examples):
-        return tokenizer(
-            examples['text1'],
-            examples['text2'],
-            padding='max_length',
-            truncation=True,
-            max_length=512,
-        )
-
-    train_dataset = train_dataset.map(
-        preprocess_function,
-        batched=True,
-        desc="Tokenizing"
-    )
-
-    # === 评估器 ===
-    evaluator = TrackA_Accuracy_Evaluator(
-        name="reranker_4B_synthetic",
-        data_path=dev_track_a_path,
-        tokenizer=tokenizer,
-        max_length=512
-    )
-
-    # === 训练配置 ===
-    epochs = 3
-
-    training_args = TrainingArguments(
-        output_dir=output_path,
-        num_train_epochs=epochs,
-        per_device_train_batch_size=16,
-        gradient_accumulation_steps=2,
-        learning_rate=2e-5,
-        warmup_ratio=0.1,
-        eval_strategy="no",
-        save_strategy="epoch",
-        save_total_limit=2,
-        logging_steps=50,
-        bf16=True,
-        optim="adamw_8bit",
-        gradient_checkpointing=True,
-        dataloader_num_workers=0,
-        dataloader_pin_memory=False,
-        max_grad_norm=0.3,
-        remove_unused_columns=False,
-        label_names=["labels"],
-    )
-
-    print(f"\n开始训练:")
-    print(f"  - 模型: Qwen3-Reranker-4B with QLoRA")
-    print(f"  - Batch size: {training_args.per_device_train_batch_size}")
-    print(f"  - Gradient Accumulation: {training_args.gradient_accumulation_steps}")
-    print(f"  - Effective batch size: {training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps}")
-    print(f"  - Learning rate: {training_args.learning_rate}")
-    print(f"  - Epochs: {epochs}")
-    print(f"  - LoRA r: {lora_config.r}")
-    print(f"  - Gradient Checkpointing: ✅")
-
-    # === 数据整理函数 ===
-    def data_collator(features):
-        batch = {
-            'input_ids': torch.stack([torch.tensor(f['input_ids']) for f in features]),
-            'attention_mask': torch.stack([torch.tensor(f['attention_mask']) for f in features]),
-            'labels': torch.tensor([f['label'] for f in features], dtype=torch.float32),
+        max_length=MAX_LENGTH,
+        device='cuda',
+        model_kwargs={
+            'quantization_config': quantization_config,
+            'dtype': torch.bfloat16,
         }
-        return batch
-
-    # === 清理显存 ===
-    torch.cuda.empty_cache()
-
-    # === 创建评估回调 ===
-    eval_callback = EvaluateCallback(
-        evaluator=evaluator,
-        device=training_args.device
     )
 
-    # === 训练 ===
-    trainer = Trainer(
+    if model.tokenizer.pad_token is None:
+        model.tokenizer.pad_token = model.tokenizer.eos_token
+        model.model.config.pad_token_id = model.tokenizer.pad_token_id
+        print(f"✅ 设置 pad_token = eos_token")
+    print(f"✅ 模型加载完成 (4-bit量化)")
+
+    train_dataset = load_training_data(TRAIN_DATA)
+    dev_samples = load_dev_data(DEV_DATA)
+
+    print(f"\n⚙️  训练配置:")
+    print(f"  - 训练样本: {len(train_dataset)}")
+    print(f"  - 验证样本: {len(dev_samples)}")
+    print(f"  - Batch size: {BATCH_SIZE}")
+    print(f"  - Gradient accumulation: {GRADIENT_ACCUMULATION}")
+    print(f"  - Effective batch size: {BATCH_SIZE * GRADIENT_ACCUMULATION}")
+    print(f"  - Epochs: {EPOCHS}")
+    print(f"  - Learning rate: {LEARNING_RATE}")
+
+    print(f"\n🔍 Zero-shot评估:")
+    zero_shot_acc = evaluate_track_a(model, dev_samples)
+    print(f"✅ Zero-shot Accuracy: {zero_shot_acc:.4f}")
+
+    training_args = CrossEncoderTrainingArguments(
+        output_dir=OUTPUT_DIR,
+        num_train_epochs=EPOCHS,
+        per_device_train_batch_size=BATCH_SIZE,
+        gradient_accumulation_steps=GRADIENT_ACCUMULATION,
+        learning_rate=LEARNING_RATE,
+        warmup_ratio=0.1,
+        bf16=True,
+        logging_steps=50,
+        save_strategy="epoch",
+        eval_strategy="epoch",
+        save_total_limit=2,
+        push_to_hub=False,
+        report_to="none",
+        gradient_checkpointing=True,
+        optim="adamw_8bit",
+        max_grad_norm=0.3,
+    )
+
+    evaluator = TrackAEvaluator(dev_samples, name="reranker_4B")
+    model.model_card_data.generate_model_card = False
+
+    trainer = CrossEncoderTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        data_collator=data_collator,
-        callbacks=[eval_callback],
+        evaluator=[evaluator],
     )
 
-    print("\n开始训练...")
+    trainer.callback_handler.callbacks = [
+        cb for cb in trainer.callback_handler.callbacks
+        if not cb.__class__.__name__ == 'ModelCardCallback'
+    ]
+
+    torch.cuda.empty_cache()
+
+    print(f"\n🎯 开始训练...")
     trainer.train()
 
-    # === 最后评估一次 ===
-    print(f"\n最终评估...")
-    final_accuracy = evaluator(model, training_args.device)
-    print(f"Final Accuracy: {final_accuracy:.4f}")
+    print(f"\n📊 最终评估:")
+    final_accuracy = evaluate_track_a(model, dev_samples)
+    print(f"✅ Final Accuracy: {final_accuracy:.4f}")
 
-    # === 保存 ===
-    print("\n保存最终模型...")
-    try:
-        trainer.save_model(output_path)
-        tokenizer.save_pretrained(output_path)
-        print(f"✅ 模型已保存到: {output_path}")
-    except Exception as e:
-        print(f"完整模型保存失败: {e}")
-        lora_adapter_path = os.path.join(output_path, "lora_adapter")
-        model.save_pretrained(lora_adapter_path)
-        tokenizer.save_pretrained(lora_adapter_path)
-        print(f"✅ LoRA适配器已保存到: {lora_adapter_path}")
+    print(f"\n💾 保存最终模型...")
+    final_model_path = os.path.join(OUTPUT_DIR, 'final_model')
+    model.save(final_model_path)
+    print(f"✅ 模型已保存到: {final_model_path}")
 
-    print("\n✅ 训练完成!")
+    print(f"\n{'='*60}")
+    print(f"✅ 训练完成!")
+    print(f"📊 性能对比:")
+    print(f"   Zero-shot: {zero_shot_acc:.4f}")
+    print(f"   Fine-tuned: {final_accuracy:.4f}")
+    if final_accuracy > zero_shot_acc:
+        improvement = final_accuracy - zero_shot_acc
+        print(f"   提升: +{improvement:.4f} ({improvement/zero_shot_acc*100:+.1f}%)")
+    else:
+        change = final_accuracy - zero_shot_acc
+        print(f"   变化: {change:.4f} ({change/zero_shot_acc*100:.1f}%)")
+    print(f"📁 模型保存位置: {OUTPUT_DIR}")
+    print(f"{'='*60}")
 
 
 if __name__ == "__main__":
