@@ -35,3 +35,4 @@
 | 5 | BGE-m3             | TrainingSet1            | /  | /          | 2e-5 | 8          | 5      | 0.575  | 0.58  | 
 | 6 | jina-v3            | TrainingSet1            | /  | /          | 2e-5 | 16         | 5      | 0.495  | 0.50  | 
 | 7 | GTE-large-en-v1.5  | TrainingSet1            | /  | /          | 5e-7 | 16         | 5      | 0.600  | 0.60  | 
+| 8 | GTE-large-en-v1.5  | TrainingSet1            | 32 | 64         | 5e-7 | 16         | 5      | 0.580  | 0.58  | 
