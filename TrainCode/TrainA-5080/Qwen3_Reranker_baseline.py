@@ -169,8 +169,17 @@ def main():
     dev_track_a_path = f'{PROJECT_ROOT}/TrainingSet1/dev_track_a.jsonl'
     synthetic_data_path = f'{PROJECT_ROOT}/TrainingSet1/synthetic_data_for_classification.jsonl'
 
+    # === 加载Tokenizer ===
+    print(f"加载Tokenizer: {model_name}")
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    # 🔧 关键修复: 设置pad_token
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        print(f"✅ 设置 pad_token = eos_token: {tokenizer.pad_token}")
+
     # === 构建模型 with QLoRA ===
-    print(f"加载模型: {model_name}")
+    print(f"\n加载模型: {model_name}")
     print("使用4-bit量化配置...")
 
     bnb_config = BitsAndBytesConfig(
@@ -180,9 +189,6 @@ def main():
         bnb_4bit_use_double_quant=True,
     )
 
-    # 加载Tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-
     # 加载模型
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
@@ -191,6 +197,9 @@ def main():
         device_map="auto",
         torch_dtype=torch.bfloat16,
     )
+
+    # 🔧 关键修复: 设置模型的pad_token_id
+    model.config.pad_token_id = tokenizer.pad_token_id
 
     # 开启梯度检查点以节省显存
     model = prepare_model_for_kbit_training(
@@ -256,7 +265,7 @@ def main():
         gradient_accumulation_steps=2,
         learning_rate=2e-5,
         warmup_ratio=0.1,
-        eval_strategy="no",  # 改为no,使用callback手动评估
+        eval_strategy="no",
         save_strategy="epoch",
         save_total_limit=2,
         logging_steps=50,
