@@ -1,47 +1,50 @@
 """
-Track A提交文件生成脚本
-使用训练好的Qwen3-Reranker-4B模型生成track_a.jsonl
+Track A预测 - 使用BGE-large-en-v1.5模型
 """
 import os
 import json
 import zipfile
-from sentence_transformers import CrossEncoder
+from sentence_transformers import SentenceTransformer, util
 from datasets import load_dataset
 from tqdm import tqdm
-import torch
 
 # --- 配置 ---
 
-# ❗ 模型路径 (训练好的模型)
-MODEL_PATH = '/mnt/e/Code/python/Narrative-Similarity-Task/output/track_a_trainer_4bit/checkpoint-238'
+# ❗ BGE模型路径 (训练好的或原始的)
+MODEL_PATH = '/mnt/e/Code/python/Narrative-Similarity-Task/output/track_b_bge_baseline_5080_wsl/checkpoint-2136'
+# 或者用原始模型:
+# MODEL_PATH = 'BAAI/bge-large-en-v1.5'
 
 # 考题文件 (CodaLab 开发集)
-INPUT_DATA_FILE = '/mnt/e/Code/python/Narrative-Similarity-Task//TrainingSet1/dev_track_a.jsonl'
+INPUT_DATA_FILE = '/mnt/e/Code/python/Narrative-Similarity-Task/TrainingSet1/dev_track_a.jsonl'
 
 # 输出目录
-OUTPUT_DIR = '/mnt/e/Code/python/Narrative-Similarity-Task//submissions/track_a_submission'
+OUTPUT_DIR = '/mnt/e/Code/python/Narrative-Similarity-Task/submissions/track_a_bge_submission'
 
-# CodaLab 要求的文件名
+# CodaLab要求的文件名
 OUTPUT_JSONL_FILE = 'track_a.jsonl'
 OUTPUT_ZIP_FILE = 'submission.zip'
 
 
 def main():
-    print(f"🚀 开始生成 Track A CodaLab 提交文件...")
+    print(f"🚀 开始生成 BGE Track A 提交文件...")
     print(f"   模型路径: {MODEL_PATH}")
     print(f"   输入数据: {INPUT_DATA_FILE}")
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # === 1. 加载模型 ===
-    print("正在加载 Reranker 模型...")
-    model = CrossEncoder(
-        MODEL_PATH,
-        num_labels=1,
-        max_length=512,
-        device='cuda' if torch.cuda.is_available() else 'cpu'
-    )
-    print(f"✅ 模型加载成功 (设备: {model.device})")
+    # === 1. 加载BGE模型 ===
+    print("正在加载 BGE 模型...")
+    try:
+        model = SentenceTransformer(MODEL_PATH)
+        print("✅ BGE 模型加载成功 (从本地checkpoint)")
+    except Exception as e:
+        print(f"本地加载失败: {e}")
+        print("尝试从HuggingFace下载原始模型...")
+        model = SentenceTransformer('BAAI/bge-large-en-v1.5')
+        print("✅ BGE 模型从HF加载成功")
+
+    print(f"   Embedding维度: {model.get_sentence_embedding_dimension()}")
 
     # === 2. 加载考题数据 ===
     print(f"正在加载考题: {INPUT_DATA_FILE}")
@@ -58,7 +61,7 @@ def main():
         text_b = item.get('text_b')
 
         if not all([anchor, text_a, text_b]):
-            print(f"⚠️ 警告: 发现缺失字段的样本,跳过")
+            print(f"⚠️ 警告: 发现缺失字段的样本")
             # 即使缺失,也要添加一个预测以保持顺序
             predictions.append({
                 'anchor_text': anchor or "",
@@ -68,12 +71,20 @@ def main():
             })
             continue
 
-        # 计算两个分数
-        score_a = model.predict([[anchor, text_a]])[0]
-        score_b = model.predict([[anchor, text_b]])[0]
+        # 编码三个文本
+        embeddings = model.encode(
+            [anchor, text_a, text_b],
+            convert_to_tensor=True,
+            normalize_embeddings=True,  # BGE推荐归一化
+            show_progress_bar=False
+        )
 
-        # 预测: text_a分数更高则为True
-        pred = score_a > score_b
+        # 计算余弦相似度
+        sim_a = util.cos_sim(embeddings[0], embeddings[1]).item()
+        sim_b = util.cos_sim(embeddings[0], embeddings[2]).item()
+
+        # 预测: text_a相似度更高则为True
+        pred = sim_a > sim_b
 
         predictions.append({
             'anchor_text': anchor,
