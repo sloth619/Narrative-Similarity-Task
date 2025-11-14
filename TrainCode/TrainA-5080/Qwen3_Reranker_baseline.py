@@ -1,5 +1,5 @@
 """
-Track A训练 - Qwen3-Reranker-4B (新Trainer API + 4bit量化) - 最终修复版
+Track A训练 - Qwen3-Reranker-4B
 """
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"

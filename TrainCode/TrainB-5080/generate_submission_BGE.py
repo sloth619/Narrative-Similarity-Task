@@ -13,13 +13,13 @@ from tqdm import tqdm
 # ❗ BGE模型路径 (训练好的或原始的)
 # MODEL_PATH = r'E:\model\BGE-large-en-v1.5'  # 原始模型
 # 或者用训练好的:
-MODEL_PATH = '../../output/track_b_bge_baseline_5080_wsl/checkpoint-2136'  # 训练后的模型
+MODEL_PATH = '/mnt/e/Code/python/Narrative-Similarity-Task/output/track_b_bge_optimized_5080/checkpoint-3840'  # 训练后的模型
 
 # 考题文件
-INPUT_DATA_FILE = '../../TrainingSet1/dev_track_b.jsonl'
+INPUT_DATA_FILE = '/mnt/e/Code/python/Narrative-Similarity-Task/TrainingSet1/dev_track_b.jsonl'
 
 # 输出目录
-OUTPUT_DIR = '../../submissions/bge_baseline_submission'
+OUTPUT_DIR = '/mnt/e/Code/python/Narrative-Similarity-Task/submissions/bge_baseline_submission'
 
 # CodaLab要求的文件名
 OUTPUT_NPY_FILE = 'track_b.npy'
