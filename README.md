@@ -14,12 +14,13 @@
 
 ### RTX5080-16GB：
 
-| # | 模型                 | 训练数据         | r  | lora_alpha | 学习率  | batch_size | Epochs | 最佳 Acc | Score |
-|:--|:-------------------|:-------------|:---|:-----------|:-----|:-----------|:-------|:-------|:------|
-| 1 | Qwen3-Reranker-4B  | TrainingSet1 | 32 | 64         | 2e-5 | 16         | 3      | 0.555  | 0.56  |
-| 2 | Qwen3-Embedding-4B | TrainingSet1 | 32 | 64         | 5e-7 | 8          | 3      | 0.635  | 0.64  |
-| 3 | BGE-large-en-v1.5  | TrainingSet1 | /  | /          | 2e-5 | 8          | 5      | 0.660  | 0.66  |
-| 3 | Qwen3-4B-Instruct  | TrainingSet1 | 32 | 64         | 2e-5 | 8          | 5      | 0.630  | 0.63  |
+| # | 模型                 | 训练数据                  | r  | lora_alpha | 学习率  | batch_size | Epochs | 最佳 Acc | Score |
+|:--|:-------------------|:----------------------|:---|:-----------|:-----|:-----------|:-------|:-------|:------|
+| 1 | Qwen3-Reranker-4B  | TrainingSet1          | 32 | 64         | 2e-5 | 16         | 3      | 0.555  | 0.56  |
+| 2 | Qwen3-Embedding-4B | TrainingSet1          | 32 | 64         | 5e-7 | 8          | 3      | 0.635  | 0.64  |
+| 3 | BGE-large-en-v1.5  | TrainingSet1          | /  | /          | 2e-5 | 8          | 5      | 0.660  | 0.66  |
+| 3 | Qwen3-4B-Instruct  | TrainingSet1          | 32 | 64         | 2e-5 | 8          | 5      | 0.630  | 0.63  |
+| 4 | BGE-large-en-v1.5  | TrainingSet_optimized | /  | /          | 2e-5 | 8          | 3      | 0.720  | 0.72  | 
 
 ## Track B：
 
@@ -47,3 +48,4 @@
 | 6 | jina-v3            | TrainingSet1            | /  | /          | 2e-5 | 16         | 5      | 0.495  | 0.50  | 
 | 7 | GTE-large-en-v1.5  | TrainingSet1            | /  | /          | 5e-7 | 16         | 5      | 0.600  | 0.60  | 
 | 8 | Qwen3-Embedding-8B | TrainingSet1            | 32 | 64         | 5e-7 | 16         | 5      | 0.580  | 0.58  | 
+| 9 | BGE-large-en-v1.5  | TrainingSet_optimized   | /  | /          | 2e-5 | 8          | 3      | 0.720  | 0.72  | 
