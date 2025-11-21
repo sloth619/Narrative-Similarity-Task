@@ -243,12 +243,6 @@ def main():
     print(f"最佳准确率: {config['accuracy_percentage']}")
     print(f"配置: E5-large + '{config['prompt']}' + normalize={config['normalize_embeddings']}")
     print("=" * 70)
-    print("\n✅ 全部完成!")
-    print("\n你已经达到了无需训练的最佳结果!")
-    print("如果要进一步提升,需要考虑:")
-    print("  1. 收集更多高质量训练数据 (>10,000样本)")
-    print("  2. 使用更大的模型 (如GPT-4-embeddings)")
-    print("  3. 设计更复杂的特征工程")
 
 
 if __name__ == "__main__":
