@@ -49,3 +49,9 @@
 | 7 | GTE-large-en-v1.5  | TrainingSet1            | /  | /          | 5e-7 | 16         | 5      | 0.600  | 0.60  | 
 | 8 | Qwen3-Embedding-8B | TrainingSet1            | 32 | 64         | 5e-7 | 16         | 5      | 0.580  | 0.58  | 
 | 9 | BGE-large-en-v1.5  | TrainingSet_optimized   | /  | /          | 2e-5 | 8          | 3      | 0.720  | 0.72  | 
+
+### 用prompt直接预测：
+
+| # | 模型                | 最佳 Acc | Score |
+|:--|:------------------|:-------|:------|
+| 1 | GTE-large-en-v1.5 | 0.67   | 0.67  | 

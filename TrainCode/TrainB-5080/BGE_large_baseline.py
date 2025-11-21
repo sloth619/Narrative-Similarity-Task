@@ -1,23 +1,32 @@
 """
-Track B训练 - BGE-large-en-v1.5 baseline (5080)
-使用官方Synthetic数据测试
+Track B训练 - BGE-large-en-v1.5 baseline
+固定seed=42，专注训练
 """
 import os
-
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 from sentence_transformers import SentenceTransformer, losses
 from datasets import load_dataset, Dataset
 from train_b_evaluator import TrackB_Accuracy_Evaluator_NoSave
-
 from sentence_transformers import SentenceTransformerTrainer
 from sentence_transformers.training_args import SentenceTransformerTrainingArguments
-
 import torch
 
 
+def set_seed(seed):
+    """固定随机种子"""
+    import random
+    import numpy as np
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 def build_triplets_from_track_a(data_path):
-    """从Track A构建训练数据 (Baseline 原始逻辑)"""
+    """从Track A构建训练数据"""
     dataset = load_dataset('json', data_files=data_path, split='train')
 
     train_data = []
@@ -28,7 +37,6 @@ def build_triplets_from_track_a(data_path):
         label_a_closer = item.get('text_a_is_closer')
 
         if not all([anchor, text_a, text_b]):
-            # 注意: Baseline 逻辑跳过了 dev_track_b 的数据
             continue
 
         if label_a_closer is not None:
@@ -36,77 +44,51 @@ def build_triplets_from_track_a(data_path):
         else:
             positive = text_a
 
-        # --- Baseline 逻辑 ---
         train_data.append({'sentence1': anchor, 'sentence2': positive})
         train_data.append({'sentence1': anchor, 'sentence2': anchor})
         train_data.append({'sentence1': positive, 'sentence2': positive})
-        # ---------------------
 
     return Dataset.from_list(train_data)
 
 
 def main():
-    print("🚀 Track B训练 - BGE-large-en-v1.5 Baseline (5080)...")
+    # 固定种子
+    SEED = 42
+    set_seed(SEED)
 
-    # === 路径配置 (已修改为WSL绝对路径) ===
+    print(f"🚀 BGE-large-en-v1.5 Full Fine-tuning - Seed {SEED}")
+
+    # 路径配置
     PROJECT_ROOT = "/mnt/e/Code/python/Narrative-Similarity-Task"
-
-    # 模型路径
     model_name = '/mnt/e/model/BGE-large-en-v1.5'
+    output_path = f'{PROJECT_ROOT}/output/bge_full_seed42'
 
-    # 输出路径
-    output_path = f'{PROJECT_ROOT}/output/track_b_bge_baseline_5080_wsl'
     os.makedirs(output_path, exist_ok=True)
 
-    # 数据集路径
-    dev_track_a_path = f'{PROJECT_ROOT}/TrainingSet1/dev_track_a.jsonl'
     synthetic_data_path = f'{PROJECT_ROOT}/TrainingSet1/synthetic_data_for_contrastive_learning.jsonl'
-    dev_track_b_path = f'{PROJECT_ROOT}/TrainingSet1/dev_track_b.jsonl'
+    dev_track_a_path = f'{PROJECT_ROOT}/TrainingSet1/dev_track_a.jsonl'
 
-    # === 加载模型  ===
-    print(f"加载模型: {model_name}")
+    # 加载模型
+    print(f"\n加载模型...")
     model = SentenceTransformer(model_name)
 
-    print(f"✅ 模型加载完成")
-    print(f"   Embedding维度: {model.get_sentence_embedding_dimension()}")
-    print(f"   参数量: {sum(p.numel() for p in model.parameters()):,}")
-
-    # === 加载数据 ===
+    # 加载数据
     print("\n加载训练数据...")
+    train_dataset = build_triplets_from_track_a(synthetic_data_path)
+    print(f"训练样本: {len(train_dataset):,}")
 
-    print("1. 加载Synthetic数据...")
-    synthetic_dataset = build_triplets_from_track_a(
-        synthetic_data_path # <-- 使用WSL路径
-    )
-    print(f"   Synthetic: {len(synthetic_dataset)} 个样本")
-
-    print("2. 加载Dev_b数据...")
-    dev_b_dataset = build_triplets_from_track_a(
-        dev_track_b_path # <-- 使用WSL路径
-    )
-    print(f"   Dev_b: {len(dev_b_dataset)} 个样本")
-
-    from datasets import concatenate_datasets
-    train_dataset = concatenate_datasets([synthetic_dataset, dev_b_dataset])
-
-    print(f"\n总训练样本: {len(train_dataset):,}")
-
-    # === 损失函数 ===
+    # 损失函数和评估器
     mnrl_loss = losses.MultipleNegativesRankingLoss(model=model)
-
-    # === 评估器 ===
     evaluator = TrackB_Accuracy_Evaluator_NoSave(
-        name="bge_baseline",
-        data_path=dev_track_a_path, # <-- 使用WSL路径
+        name="bge_full_seed42",
+        data_path=dev_track_a_path,
         batch_size=8
     )
 
-    # === 训练配置 (BGE推荐参数) ===
-    epochs = 5
-
+    # 训练配置
     training_args = SentenceTransformerTrainingArguments(
         output_dir=output_path,
-        num_train_epochs=epochs,
+        num_train_epochs=5,
         per_device_train_batch_size=8,
         gradient_accumulation_steps=1,
         learning_rate=2e-5,
@@ -115,20 +97,14 @@ def main():
         save_strategy="epoch",
         save_total_limit=2,
         load_best_model_at_end=True,
-        logging_steps=20,
+        logging_steps=50,
         metric_for_best_model="eval_evaluator",
+        greater_is_better=True,
         bf16=True,
+        seed=SEED,
     )
 
-    print(f"\n开始训练:")
-    print(f"  - 模型: BGE-large-en-v1.5")
-    print(f"  - 训练数据: Synthetic + Dev_b (Baseline-Bug-Logic)")
-    print(f"  - 总样本: {len(train_dataset):,}")
-    print(f"  - Batch size: {training_args.per_device_train_batch_size}")
-    print(f"  - Learning rate: {training_args.learning_rate}")
-    print(f"  - Epochs: {epochs}")
-
-    # === 训练 ===
+    # 训练
     trainer = SentenceTransformerTrainer(
         model=model,
         args=training_args,
@@ -137,15 +113,13 @@ def main():
         evaluator=evaluator,
     )
 
+    print("\n开始训练...\n")
     trainer.train()
 
-    # === 保存 ===
-    print("\n保存最终模型...")
+    # 保存
+    print("\n保存模型...")
     model.save(output_path)
-    print(f"✅ 模型已保存到: {output_path}")
-
-    print("✅ 训练完成!")
-    print(f"\nBGE baseline预期准确率: 60-63%")
+    print("✅ 完成!")
 
 
 if __name__ == "__main__":

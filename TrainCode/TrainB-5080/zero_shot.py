@@ -21,7 +21,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # --- 1. 配置区 ---
 
 # 🔥 在这里选择您想测试的模型
-MODEL_TO_TEST = "Qwen3-Embedding-8B"
+MODEL_TO_TEST = "Qwen3-Embedding-4B"
 # MODEL_TO_TEST = "BGE-large-en-v1.5"
 # MODEL_TO_TEST = "GTE-large-en-v1.5"
 # MODEL_TO_TEST = "Qwen3-Embedding-8B"
