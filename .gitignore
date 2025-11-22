@@ -5,3 +5,4 @@ unsloth_compiled_cache/
 output/
 submissions/
 TrainingSet1/cmu_movie_triplets.jsonl
+config/
