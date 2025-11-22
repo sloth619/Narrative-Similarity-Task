@@ -23,8 +23,10 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # 🔥 在这里选择您想测试的模型
 MODEL_TO_TEST = "Qwen3-Embedding-4B"
 # MODEL_TO_TEST = "BGE-large-en-v1.5"
-# MODEL_TO_TEST = "GTE-large-en-v1.5"
+# MODEL_TO_TEST = "E5-large-v2"
+# MODEL_TO_TEST = "jina-embeddings-v3"
 # MODEL_TO_TEST = "Qwen3-Embedding-8B"
+# MODEL_TO_TEST = "GTE-large-en-v1.5"
 
 # --- 2. 路径配置 (您的 WSL 路径) ---
 PROJECT_ROOT = "/mnt/e/Code/python/Narrative-Similarity-Task"
@@ -34,6 +36,8 @@ MODEL_PATHS = {
     "Qwen3-Embedding-8B": '/mnt/e/model/Qwen3-Embedding-8B',
     "BGE-large-en-v1.5": '/mnt/e/model/BGE-large-en-v1.5',
     "GTE-large-en-v1.5": '/mnt/e/model/gte-large-en-v1.5',
+    "E5-large-v2": '/mnt/e/model/e5-large-v2',
+    "jina-embeddings-v3": '/mnt/e/model/jina-embeddings-v3',
 }
 
 DEV_DATA_PATH = f'{PROJECT_ROOT}/TrainingSet1/dev_track_a.jsonl'
@@ -64,21 +68,20 @@ def load_model(model_name, model_path):
             bnb_4bit_use_double_quant=True,
         )
 
-        # 使用 models.Transformer 加载 QLoRA 配置
         word_embedding_model = models.Transformer(
             model_path,
             tokenizer_args={'padding_side': 'left'},
             model_args={
                 "quantization_config": bnb_config,
                 "device_map": "auto",
-                "trust_remote_code": True  # Qwen 必须
+                "trust_remote_code": True
             }
         )
 
         embedding_dim = word_embedding_model.get_word_embedding_dimension()
         pooling_model = models.Pooling(
             word_embedding_dimension=embedding_dim,
-            pooling_mode='lasttoken'  # 匹配您训练脚本的池化方式
+            pooling_mode='lasttoken'
         )
 
         model = SentenceTransformer(
@@ -87,8 +90,26 @@ def load_model(model_name, model_path):
         )
         print(f"   ✅ 4-bit {model_name} 加载完成。")
 
+    elif "jina" in model_name.lower():
+        print("   检测到 Jina 模型。正在加载...")
+        model = SentenceTransformer(
+            model_path,
+            device='cuda',
+            trust_remote_code=True
+        )
+        print(f"   ✅ {model_name} 加载完成。")
+
+    elif "GTE" in model_name or "gte" in model_name.lower():  # ✅ GTE专用
+        print("   检测到 GTE 模型。正在加载...")
+        model = SentenceTransformer(
+            model_path,
+            device='cuda',
+            trust_remote_code=True  # ✅ GTE也需要
+        )
+        print(f"   ✅ {model_name} 加载完成。")
+
     else:
-        print("   检测到 BGE/GTE。正在标准加载...")
+        print("   检测到 BGE/E5。正在标准加载...")
         model = SentenceTransformer(model_path, device='cuda')
         print(f"   ✅ {model_name} 加载完成。")
 

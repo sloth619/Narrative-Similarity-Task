@@ -22,6 +22,12 @@
 | 3 | Qwen3-4B-Instruct  | TrainingSet1          | 32 | 64         | 2e-5 | 8          | 5      | 0.630  | 0.63  |
 | 4 | BGE-large-en-v1.5  | TrainingSet_optimized | /  | /          | 2e-5 | 8          | 3      | 0.720  | 0.72  | 
 
+### LLM直接生成：
+
+| # | 模型             | Score |
+|:--|:---------------|:------|
+| 1 | Gemini-2.5-pro | 0.71  | 
+
 ## Track B：
 
 ### A100-40GB：
