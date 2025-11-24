@@ -21,7 +21,7 @@
 | 3 | BGE-large-en-v1.5  | TrainingSet1                 | /  | /          | 2e-5 | 8          | 5      | 0.660  | 0.66  |
 | 3 | Qwen3-4B-Instruct  | TrainingSet1                 | 32 | 64         | 2e-5 | 8          | 5      | 0.630  | 0.63  |
 | 4 | BGE-large-en-v1.5  | TrainingSet_optimized        | /  | /          | 2e-5 | 8          | 3      | 0.720  | 0.72  | 
-| 5 | Deberta-v3-large   | TrainingSet1+Multiple Choice | /  | /          | 2e-6 | 8          | 3      | 0.395  | 0.40  | 
+| 5 | Deberta-v3-large   | TrainingSet1+Multiple Choice | /  | /          | 2e-6 | 8          | 3      | 0.540  | 0.54  | 
 
 ### LLM直接生成：
 
