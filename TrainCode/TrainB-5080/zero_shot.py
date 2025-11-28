@@ -27,11 +27,12 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # --- 1. 配置区 ---
 
 # 🔥 在这里选择您想测试的模型
-MODEL_TO_TEST = "DeBERTa-v3-large"
+# MODEL_TO_TEST = "DeBERTa-v3-large"
 # MODEL_TO_TEST = "Qwen3-Embedding-4B"
 # MODEL_TO_TEST = "BGE-large-en-v1.5"
 # MODEL_TO_TEST = "E5-large-v2"
 # MODEL_TO_TEST = "jina-embeddings-v3"
+MODEL_TO_TEST = "E5-large-v2"
 
 # --- 2. 路径配置 ---
 PROJECT_ROOT = "/mnt/e/Code/python/Narrative-Similarity-Task"
@@ -44,6 +45,8 @@ MODEL_PATHS = {
     "GTE-large-en-v1.5": '/mnt/e/model/gte-large-en-v1.5',
     "E5-large-v2": '/mnt/e/model/e5-large-v2',
     "jina-embeddings-v3": '/mnt/e/model/jina-embeddings-v3',
+    "bge-en-icl":'/mnt/e/model/bge-en-icl',
+    "bge-m3": '/mnt/e/model/bge-m3',
 
     # Multiple Choice模型
     "DeBERTa-v3-large": "microsoft/deberta-v3-large",
@@ -65,7 +68,7 @@ def load_embedding_model(model_name, model_path):
 
     start_time = time.time()
 
-    if "Qwen" in model_name:
+    if "Qwen" in model_name or "bge-en-icl" in model_name.lower():
         print("   应用 4-bit 量化...")
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -74,9 +77,17 @@ def load_embedding_model(model_name, model_path):
             bnb_4bit_use_double_quant=True,
         )
 
+        # 确定padding方向和pooling模式
+        if "Qwen" in model_name:
+            padding_side = 'left'
+            pooling_mode = 'lasttoken'
+        else:  # bge-en-icl
+            padding_side = 'right'
+            pooling_mode = 'cls'  # BGE系列通常用CLS
+
         word_embedding_model = models.Transformer(
             model_path,
-            tokenizer_args={'padding_side': 'left'},
+            tokenizer_args={'padding_side': padding_side},
             model_args={
                 "quantization_config": bnb_config,
                 "device_map": "auto",
@@ -87,7 +98,7 @@ def load_embedding_model(model_name, model_path):
         embedding_dim = word_embedding_model.get_word_embedding_dimension()
         pooling_model = models.Pooling(
             word_embedding_dimension=embedding_dim,
-            pooling_mode='lasttoken'
+            pooling_mode=pooling_mode
         )
 
         model = SentenceTransformer(
@@ -279,7 +290,6 @@ def evaluate_multiple_choice_model(tokenizer, model, data_path, model_name):
 # --- 6. 主函数 ---
 
 def main():
-    MODEL_TO_TEST = "DeBERTa-v3-large"  # 在这里修改要测试的模型
 
     model_path = MODEL_PATHS.get(MODEL_TO_TEST)
 
